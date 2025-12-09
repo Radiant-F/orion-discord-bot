@@ -1,3 +1,4 @@
+import http from "http";
 import {
   ButtonInteraction,
   Client,
@@ -164,6 +165,17 @@ client.on("interactionCreate", async (interaction) => {
 client.once("ready", () => {
   console.log(`Logged in as ${client.user?.tag}`);
 });
+
+// Minimal HTTP server for Render health checks (free tier requires Web Service)
+const PORT = process.env.PORT || 3000;
+http
+  .createServer((_, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("OK");
+  })
+  .listen(PORT, () => {
+    console.log(`Health-check server listening on port ${PORT}`);
+  });
 
 const token = requireEnv(env.token, "DISCORD_TOKEN");
 client.login(token);
