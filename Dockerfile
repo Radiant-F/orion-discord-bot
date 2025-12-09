@@ -1,9 +1,9 @@
 # Build stage
-FROM node:20-bullseye AS build
+FROM node:22-bookworm AS build
 
-# Install ffmpeg for audio streaming
+# Install ffmpeg and python for native deps
 RUN apt-get update \ 
-  && apt-get install -y ffmpeg \ 
+  && apt-get install -y ffmpeg python3 python-is-python3 \ 
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -15,11 +15,11 @@ COPY . .
 RUN npm run build
 
 # Runtime stage
-FROM node:20-bullseye AS runtime
+FROM node:22-bookworm-slim AS runtime
 
 # Install ffmpeg for runtime playback
 RUN apt-get update \ 
-  && apt-get install -y ffmpeg \ 
+  && apt-get install -y ffmpeg python3 python-is-python3 \ 
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
