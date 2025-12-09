@@ -18,9 +18,12 @@ import play from "play-dl";
 import ytdl from "@distube/ytdl-core";
 import { Innertube, UniversalCache } from "youtubei.js";
 import { Track } from "./types";
+import youtubeDlExec from "youtube-dl-exec";
 
-// Use system yt-dlp binary (installed via apt in Docker, or available in PATH locally)
-const ytDlpPath = process.env.YTDLP_PATH || "yt-dlp";
+// Get the yt-dlp binary path
+const ytDlpPath =
+  (youtubeDlExec as any).constants?.YOUTUBE_DL_PATH ||
+  require("youtube-dl-exec").constants.YOUTUBE_DL_PATH;
 
 // Idle timeout before disconnecting (3 minutes)
 const IDLE_TIMEOUT_MS = 3 * 60 * 1000;
