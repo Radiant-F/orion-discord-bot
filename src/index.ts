@@ -135,12 +135,11 @@ async function handleSearchSelect(interaction: StringSelectMenuInteraction) {
     await music.play(voiceChannel, playable);
     await interaction.reply({
       content: `Queued **${playable.title}**`,
-      ephemeral: true,
     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to queue that track.";
-    await interaction.reply({ content: message, ephemeral: true });
+    await interaction.reply({ content: message });
   }
 }
 

@@ -93,7 +93,6 @@ function buildPayload(session: SearchSession) {
   return {
     embeds: [embed],
     components: [controls, selectorRow],
-    ephemeral: true,
   };
 }
 
@@ -102,7 +101,7 @@ const execute = async (
   { search, sessions }: CommandDependencies
 ) => {
   const query = interaction.options.getString("query", true);
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply();
 
   const results = await search.search(query, "auto", 30);
   if (!results.length) {
