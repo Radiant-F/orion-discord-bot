@@ -5,6 +5,7 @@ import {
 } from "discord.js";
 import { Command, CommandDependencies } from "../types/command";
 import { formatDuration } from "../utils/format";
+import { ensureUserVoiceChannel } from "../utils/voice";
 
 const data = new SlashCommandBuilder()
   .setName("queue")
@@ -14,13 +15,7 @@ const execute = async (
   interaction: ChatInputCommandInteraction,
   { music }: CommandDependencies
 ) => {
-  if (!interaction.guild) {
-    await interaction.reply({
-      content: "This command is for servers only.",
-      ephemeral: true,
-    });
-    return;
-  }
+  if (!ensureUserVoiceChannel(interaction) || !interaction.guild) return;
 
   const state = music.getState(interaction.guild);
   const embed = new EmbedBuilder().setTitle("Queue");

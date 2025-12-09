@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from "discord.js";
 import { Command, CommandDependencies } from "../types/command";
+import { ensureUserVoiceChannel } from "../utils/voice";
 
 const data = new SlashCommandBuilder()
   .setName("stop")
@@ -9,13 +10,7 @@ const execute = async (
   interaction: ChatInputCommandInteraction,
   { music }: CommandDependencies
 ) => {
-  if (!interaction.guild) {
-    await interaction.reply({
-      content: "This command is for servers only.",
-      ephemeral: true,
-    });
-    return;
-  }
+  if (!ensureUserVoiceChannel(interaction) || !interaction.guild) return;
   music.stop(interaction.guild);
   await interaction.reply("Stopped playback and cleared the queue.");
 };

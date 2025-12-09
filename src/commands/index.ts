@@ -6,6 +6,7 @@ import { resumeCommand } from "./resume";
 import { searchCommand } from "./search";
 import { skipCommand } from "./skip";
 import { stopCommand } from "./stop";
+import { clearCommand } from "./clear";
 
 export const commands: Command[] = [
   playCommand,
@@ -15,4 +16,5 @@ export const commands: Command[] = [
   skipCommand,
   stopCommand,
   queueCommand,
+  clearCommand,
 ];

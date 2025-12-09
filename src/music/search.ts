@@ -11,6 +11,9 @@ interface SpotifyAuthState {
 const SPOTIFY_TRACK_REGEX = /open\.spotify\.com\/track\/([a-zA-Z0-9]+)/;
 const SPOTIFY_INTL_TRACK_REGEX =
   /open\.spotify\.com\/intl-[a-z]+\/track\/([a-zA-Z0-9]+)/;
+const SPOTIFY_PLAYLIST_REGEX = /open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
+const SPOTIFY_INTL_PLAYLIST_REGEX =
+  /open\.spotify\.com\/intl-[a-z]+\/playlist\/([a-zA-Z0-9]+)/;
 const YOUTUBE_URL_REGEX =
   /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]+)/;
 
@@ -32,6 +35,15 @@ export class SearchService {
     source: TrackSource | "auto" = "auto",
     limit = 20
   ): Promise<Track[]> {
+    // Spotify playlist URL
+    const playlistMatch =
+      query.match(SPOTIFY_PLAYLIST_REGEX) ||
+      query.match(SPOTIFY_INTL_PLAYLIST_REGEX);
+    if (playlistMatch) {
+      const playlist = await this.getSpotifyPlaylist(playlistMatch[1], limit);
+      return playlist.tracks;
+    }
+
     // Check if query is a Spotify URL
     const spotifyMatch =
       query.match(SPOTIFY_TRACK_REGEX) || query.match(SPOTIFY_INTL_TRACK_REGEX);
@@ -71,25 +83,51 @@ export class SearchService {
     const results: Track[] = [];
 
     if (source !== "spotify") {
-      const yt = await play.search(query, {
-        limit: 10,
-        source: { youtube: "video" },
-      });
-      yt.forEach((item) => {
-        if (!item.url) return;
-        results.push({
-          title: item.title ?? "Unknown title",
-          url: item.url,
-          source: "youtube",
-          duration: item.durationInSec,
-          playbackUrl: item.url,
+      const ytLimit = Math.min(limit, 20);
+      const gather = (items: any[]) => {
+        items.forEach((item) => {
+          if (!item?.url) return;
+          results.push({
+            title: item.title ?? "Unknown title",
+            url: item.url,
+            source: "youtube",
+            duration: item.durationInSec,
+            playbackUrl: item.url,
+          });
         });
-      });
+      };
+
+      const trySearch = async (q: string) => {
+        const yt = await play.search(q, {
+          limit: ytLimit,
+          source: { youtube: "video" },
+        });
+        gather(yt);
+      };
+
+      try {
+        await trySearch(query);
+      } catch (err) {
+        console.error("YouTube search failed", err);
+        // Fallback with a slightly more specific query to avoid bad results
+        try {
+          await trySearch(`${query} song`);
+        } catch (fallbackErr) {
+          console.error("YouTube search fallback failed", fallbackErr);
+        }
+      }
     }
 
     if (source !== "youtube" && this.spotify) {
-      const spotifyTracks = await this.searchSpotify(query, 10);
-      results.push(...spotifyTracks);
+      try {
+        const spotifyTracks = await this.searchSpotify(
+          query,
+          Math.min(limit, 20)
+        );
+        results.push(...spotifyTracks);
+      } catch (err) {
+        console.error("Spotify search failed", err);
+      }
     }
 
     return results.slice(0, limit);
@@ -148,6 +186,61 @@ export class SearchService {
     } catch (err) {
       console.error("Failed to fetch Spotify track", err);
       return null;
+    }
+  }
+
+  async getSpotifyPlaylistFromUrl(
+    url: string,
+    limit = 20
+  ): Promise<{ name: string | null; tracks: Track[] } | null> {
+    const match =
+      url.match(SPOTIFY_PLAYLIST_REGEX) ||
+      url.match(SPOTIFY_INTL_PLAYLIST_REGEX);
+    if (!match) return null;
+    return this.getSpotifyPlaylist(match[1], limit);
+  }
+
+  private async getSpotifyPlaylist(
+    playlistId: string,
+    limit: number
+  ): Promise<{ name: string | null; tracks: Track[] }> {
+    if (!this.spotify) {
+      console.warn("Spotify client not configured, cannot fetch playlist");
+      return { name: null, tracks: [] };
+    }
+
+    try {
+      await this.ensureSpotifyToken();
+      const res = await this.spotify.getPlaylist(playlistId);
+      const name = res.body.name ?? null;
+      const items = res.body.tracks?.items ?? [];
+
+      const tracks: Track[] = items
+        .slice(0, limit)
+        .map((item) => item.track)
+        .filter(Boolean)
+        .map((track): Track | null => {
+          if (!track) return null;
+          const artistNames = track.artists
+            .map((artist) => artist.name)
+            .join(", ");
+          const title = `${track.name} - ${artistNames}`;
+          const url = track.external_urls?.spotify;
+          if (!url) return null;
+          return {
+            title,
+            url,
+            source: "spotify",
+            duration: Math.floor(((track.duration_ms as number) ?? 0) / 1000),
+            searchQuery: title,
+          };
+        })
+        .filter((t): t is Track => Boolean(t));
+
+      return { name, tracks };
+    } catch (err) {
+      console.error("Failed to fetch Spotify playlist", err);
+      return { name: null, tracks: [] };
     }
   }
 

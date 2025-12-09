@@ -101,6 +101,12 @@ class GuildQueue {
     this.player.stop(true);
   }
 
+  clearUpcoming(): number {
+    const removed = this.queue.length;
+    this.queue = [];
+    return removed;
+  }
+
   disconnect(): void {
     this.clearIdleTimeout();
     this.queue = [];
@@ -355,6 +361,10 @@ export class MusicManager {
 
   stop(guild: Guild): void {
     this.getQueue(guild).stop();
+  }
+
+  clear(guild: Guild): number {
+    return this.getQueue(guild).clearUpcoming();
   }
 
   getState(guild: Guild): { current?: Track; upcoming: Track[] } {
