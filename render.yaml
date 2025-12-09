@@ -1,0 +1,13 @@
+services:
+  - type: worker
+    name: orion-discord-bot
+    env: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
