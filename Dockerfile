@@ -9,10 +9,9 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY package*.json ./
-# Skip youtube-dl-exec postinstall (we use system yt-dlp)
-RUN npm ci --ignore-scripts
-# Run other postinstalls manually (for @discordjs/opus etc)
-RUN npm rebuild
+# Install deps without running postinstall scripts, then rebuild only native modules
+RUN npm ci --ignore-scripts \
+  && npm rebuild @discordjs/opus
 
 COPY . .
 RUN npm run build
@@ -28,10 +27,9 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY package*.json ./
-# Skip youtube-dl-exec postinstall (we use system yt-dlp)
-RUN npm ci --omit=dev --ignore-scripts
-# Run other postinstalls manually (for @discordjs/opus etc)
-RUN npm rebuild
+# Install deps without running postinstall scripts, then rebuild only native modules
+RUN npm ci --omit=dev --ignore-scripts \
+  && npm rebuild @discordjs/opus
 
 COPY --from=build /app/dist ./dist
 
