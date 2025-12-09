@@ -28,6 +28,5 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/.env.example ./.env.example
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/src/index.js"]
