@@ -36,3 +36,5 @@ TypeScript Discord music bot with YouTube + Spotify search, queue, and paginated
 
 - Spotify results are resolved to YouTube for playback. Provide Spotify client credentials for richer search results.
 - The bot needs the `Guilds` and `GuildVoiceStates` intents enabled in the Discord developer portal.
+- If YouTube returns "Sign in to confirm you're not a bot" (common on render.com), set `YOUTUBE_COOKIE` to a browser-exported YouTube cookie header. The bot passes it to yt-dlp/play-dl/ytdl-core to avoid those blocks.
+- To silence yt-dlp's cookie-header warning, prefer a Netscape-format cookies file. Set `YOUTUBE_COOKIE_FILE` to that file path, or paste the file contents into `YOUTUBE_COOKIES` and the bot will write a temp file for yt-dlp.

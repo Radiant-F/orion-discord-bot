@@ -13,17 +13,43 @@ import {
 } from "@discordjs/voice";
 import { Guild, VoiceBasedChannel } from "discord.js";
 import { Readable, PassThrough } from "stream";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { spawn } from "child_process";
 import play from "play-dl";
 import ytdl from "@distube/ytdl-core";
 import { Innertube, UniversalCache } from "youtubei.js";
 import { Track } from "./types";
 import youtubeDlExec from "youtube-dl-exec";
+import { env } from "../config/env";
 
 // Get the yt-dlp binary path
 const ytDlpPath =
   (youtubeDlExec as any).constants?.YOUTUBE_DL_PATH ||
   require("youtube-dl-exec").constants.YOUTUBE_DL_PATH;
+
+// Optional cookie header to bypass YouTube bot checks (recommended for render.com)
+const youtubeCookie = env.youtubeCookie?.trim();
+let youtubeCookieFilePath: string | undefined;
+
+// Prefer a provided cookies file path
+if (env.youtubeCookieFile && fs.existsSync(env.youtubeCookieFile)) {
+  youtubeCookieFilePath = env.youtubeCookieFile;
+} else if (env.youtubeCookiesText?.trim()) {
+  // If inline cookies text is provided, write it to a temp file for yt-dlp
+  try {
+    const tmpPath = path.join(os.tmpdir(), "youtube-cookies.txt");
+    fs.writeFileSync(tmpPath, env.youtubeCookiesText.trim(), "utf8");
+    youtubeCookieFilePath = tmpPath;
+  } catch (err) {
+    console.warn("Failed to write inline cookies to temp file", err);
+  }
+}
+if (youtubeCookie) {
+  // Tell play-dl to reuse the cookie when it makes requests
+  play.setToken({ youtube: { cookie: youtubeCookie } });
+}
 
 // Idle timeout before disconnecting (3 minutes)
 const IDLE_TIMEOUT_MS = 3 * 60 * 1000;
@@ -192,6 +218,14 @@ class GuildQueue {
         filter: "audioonly",
         quality: "highestaudio",
         highWaterMark: 1 << 25,
+        requestOptions: youtubeCookie
+          ? {
+              headers: {
+                // Send user-provided cookie to avoid "confirm you're not a bot" blocks
+                cookie: youtubeCookie,
+              },
+            }
+          : undefined,
       });
       const { stream, type } = await demuxProbe(ytStream);
       const resource = createAudioResource(stream, { inputType: type });
@@ -285,22 +319,27 @@ class GuildQueue {
     try {
       console.debug("Attempting yt-dlp stream", { url, ytDlpPath });
 
-      const proc = spawn(
-        ytDlpPath,
-        [
-          url,
-          "-o",
-          "-",
-          "-f",
-          "bestaudio[ext=webm][acodec=opus]/bestaudio/best",
-          "--no-playlist",
-          "--quiet",
-          "--no-warnings",
-        ],
-        {
-          stdio: ["ignore", "pipe", "pipe"],
-        }
-      );
+      const args = [
+        url,
+        "-o",
+        "-",
+        "-f",
+        "bestaudio[ext=webm][acodec=opus]/bestaudio/best",
+        "--no-playlist",
+        "--quiet",
+        "--no-warnings",
+      ];
+
+      if (youtubeCookieFilePath) {
+        args.push("--cookies", youtubeCookieFilePath);
+      } else if (youtubeCookie) {
+        // yt-dlp accepts Cookie header via --add-header; this avoids writing files
+        args.push("--add-header", `Cookie: ${youtubeCookie}`);
+      }
+
+      const proc = spawn(ytDlpPath, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
 
       // Log any stderr for debugging
       proc.stderr?.on("data", (data: Buffer) => {
@@ -316,9 +355,15 @@ class GuildQueue {
       // Wait a bit to ensure the stream has started
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const { stream, type } = await demuxProbe(stdout);
-      console.debug("yt-dlp stream created successfully", { type });
-      return createAudioResource(stream, { inputType: type });
+      try {
+        const { stream, type } = await demuxProbe(stdout);
+        console.debug("yt-dlp stream created successfully", { type });
+        return createAudioResource(stream, { inputType: type });
+      } catch (probeErr) {
+        // demuxProbe needs ffmpeg; if unavailable, stream as arbitrary bytes and let Discord handle it
+        console.warn("demuxProbe failed, streaming as arbitrary", probeErr);
+        return createAudioResource(stdout, { inputType: StreamType.Arbitrary });
+      }
     } catch (err) {
       console.error("yt-dlp fallback failed", err);
       return null;
