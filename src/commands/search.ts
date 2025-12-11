@@ -66,7 +66,7 @@ function buildPayload(session: SearchSession) {
     .setMaxValues(1)
     .addOptions(
       slice.map((track, idx) => ({
-        label: track.title.slice(0, 100),
+        label: `${start + idx + 1}. ${track.title}`.slice(0, 100),
         description: `${track.source.toUpperCase()} • ${formatDuration(
           track.duration
         )}`.slice(0, 100),

@@ -12,14 +12,11 @@ import {
   StreamType,
 } from "@discordjs/voice";
 import { Guild, VoiceBasedChannel } from "discord.js";
-import { Readable, PassThrough } from "stream";
 import fs from "fs";
 import os from "os";
 import path from "path";
 import { spawn } from "child_process";
 import play from "play-dl";
-import ytdl from "@distube/ytdl-core";
-import { Innertube, UniversalCache } from "youtubei.js";
 import { Track } from "./types";
 import youtubeDlExec from "youtube-dl-exec";
 import { env } from "../config/env";
@@ -60,7 +57,6 @@ class GuildQueue {
   private player: AudioPlayer;
   private queue: Track[] = [];
   private current?: Track;
-  private youtubeClient?: Promise<Innertube>;
   private idleTimeout?: NodeJS.Timeout;
   private onDestroy?: () => void;
 
@@ -198,53 +194,7 @@ class GuildQueue {
       return;
     }
 
-    // Fallback to play-dl
-    console.debug("Attempting play-dl stream");
-    try {
-      const streamInfo = await play.stream(validatedUrl);
-      const resource: AudioResource = createAudioResource(streamInfo.stream, {
-        inputType: streamInfo.type,
-      });
-      this.player.play(resource);
-      console.debug("Playing via play-dl");
-      return;
-    } catch (err) {
-      console.warn("play-dl stream failed", err);
-    }
-
-    // Fallback to ytdl-core
-    try {
-      const ytStream = ytdl(validatedUrl, {
-        filter: "audioonly",
-        quality: "highestaudio",
-        highWaterMark: 1 << 25,
-        requestOptions: youtubeCookie
-          ? {
-              headers: {
-                // Send user-provided cookie to avoid "confirm you're not a bot" blocks
-                cookie: youtubeCookie,
-              },
-            }
-          : undefined,
-      });
-      const { stream, type } = await demuxProbe(ytStream);
-      const resource = createAudioResource(stream, { inputType: type });
-      this.player.play(resource);
-      console.debug("Playing via ytdl-core");
-      return;
-    } catch (err) {
-      console.warn("ytdl-core play failed", err);
-    }
-
-    // Fallback to youtubei.js
-    const youtubeiResource = await this.tryYoutubei(validatedUrl);
-    if (youtubeiResource) {
-      console.debug("Playing via youtubei.js");
-      this.player.play(youtubeiResource);
-      return;
-    }
-
-    console.error("All playback fallbacks failed", next);
+    console.error("yt-dlp playback failed, skipping", next);
     this.playNext();
   }
 
@@ -273,46 +223,6 @@ class GuildQueue {
 
     console.error("Unable to obtain valid YouTube URL", { url, track });
     return null;
-  }
-
-  private async getYoutubeClient(): Promise<Innertube> {
-    if (!this.youtubeClient) {
-      this.youtubeClient = Innertube.create({
-        cache: new UniversalCache(false),
-      });
-    }
-    return this.youtubeClient;
-  }
-
-  private extractVideoId(url: string): string | null {
-    try {
-      const u = new URL(url);
-      if (u.hostname.includes("youtu.be")) {
-        return u.pathname.replace("/", "");
-      }
-      const v = u.searchParams.get("v");
-      if (v) return v;
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  private async tryYoutubei(url: string): Promise<AudioResource | null> {
-    const videoId = this.extractVideoId(url);
-    if (!videoId) return null;
-    try {
-      const yt = await this.getYoutubeClient();
-      const audioStream = (await yt.download(videoId, {
-        type: "audio",
-        quality: "best",
-      })) as unknown as Readable;
-      const { stream: probed, type } = await demuxProbe(audioStream);
-      return createAudioResource(probed, { inputType: type });
-    } catch (err) {
-      console.error("youtubei download failed", err);
-      return null;
-    }
   }
 
   private async tryYtDlp(url: string): Promise<AudioResource | null> {
